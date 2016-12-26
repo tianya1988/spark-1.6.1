@@ -859,8 +859,17 @@ object StreamingContext extends Logging {
       hadoopConf: Configuration = SparkHadoopUtil.get.conf,
       createOnError: Boolean = false
     ): StreamingContext = {
+
+    /**
+     * 从给定的checkpoint目录中读取文件。正常情况下返回Option[Checkpoint],具体见read方法
+     */
     val checkpointOption = CheckpointReader.read(
       checkpointPath, new SparkConf(), hadoopConf, createOnError)
+
+    /**
+     * 如果checkpointOption有值，则根据checkpoint生成StreamingContext，其后getOrElse则会返回对应的StreamingContext。
+     * 如果checkpointOption没有值，则getOrElse会新生成一个StreamingContext。
+     */
     checkpointOption.map(new StreamingContext(null, _, null)).getOrElse(creatingFunc())
   }
 
