@@ -55,6 +55,7 @@ class JobGenerator(jobScheduler: JobScheduler) extends Logging {
     }
   }
 
+  //longTime => eventLoop.post(GenerateJobs(new Time(longTime))) is callback
   private val timer = new RecurringTimer(clock, ssc.graph.batchDuration.milliseconds,
     longTime => eventLoop.post(GenerateJobs(new Time(longTime))), "JobGenerator")
 
@@ -82,6 +83,15 @@ class JobGenerator(jobScheduler: JobScheduler) extends Logging {
     // Call checkpointWriter here to initialize it before eventLoop uses it to avoid a deadlock.
     // See SPARK-10125
     checkpointWriter
+
+    /**
+     * 每隔一段时间RecurringTimer会生成一个JobGeneratorEvent，
+     * 并将此事件JobGeneratorEvent放入到EventLoop类中
+     * 维护的eventQueue（既java.util.concurrent.LinkedBlockingDeque）队列中,
+     * EventLoop会启动一个线程，当有事件放入此队列时，
+     * 执行回调函数onReceive，也就是JobGenerator中的processEvent，
+     * 进而执行generateJobs方法，进而调用graph.generateJobs(time)
+     */
 
     eventLoop = new EventLoop[JobGeneratorEvent]("JobGenerator") {
       override protected def onReceive(event: JobGeneratorEvent): Unit = processEvent(event)
@@ -245,6 +255,8 @@ class JobGenerator(jobScheduler: JobScheduler) extends Logging {
     SparkEnv.set(ssc.env)
     Try {
       jobScheduler.receiverTracker.allocateBlocksToBatch(time) // allocate received blocks to batch
+
+      //生成RDD DAG实例
       graph.generateJobs(time) // generate jobs using allocated block
     } match {
       case Success(jobs) =>
