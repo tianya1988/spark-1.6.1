@@ -196,6 +196,7 @@ class JobScheduler(val ssc: StreamingContext) extends Logging {
     ssc.waiter.notifyError(e)
   }
 
+  //JobScheduler的常规内部类
   private class JobHandler(job: Job) extends Runnable with Logging {
     import JobScheduler._
 

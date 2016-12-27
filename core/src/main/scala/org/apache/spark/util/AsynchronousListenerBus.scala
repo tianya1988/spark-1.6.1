@@ -25,10 +25,14 @@ import org.apache.spark.SparkContext
 
 /**
  * Asynchronously passes events to registered listeners.
+ * 异步地将事件传递给注册的侦听器
  *
  * Until `start()` is called, all posted events are only buffered. Only after this listener bus
- * has started will events be actually propagated to all attached listeners. This listener bus
+ * has started will events be actually propagated(传播) to all attached listeners. This listener bus
  * is stopped when `stop()` is called, and it will drop further events after stopping.
+ *
+ * 直到调用`start（）`，所有发布的事件才被缓冲。 只有在此侦听器总线启动后，事件才会实际传播到所有附加的侦听器。
+ * 当调用`stop（）`时，这个侦听器总线停止，并且停止后它将丢弃更多的事件。
  *
  * @param name name of the listener bus, will be the name of the listener thread.
  * @tparam L type of listener

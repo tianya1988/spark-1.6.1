@@ -256,7 +256,7 @@ class JobGenerator(jobScheduler: JobScheduler) extends Logging {
     Try {
       jobScheduler.receiverTracker.allocateBlocksToBatch(time) // allocate received blocks to batch
 
-      //生成RDD DAG实例
+      //生成RDDDAG 实例
       graph.generateJobs(time) // generate jobs using allocated block
     } match {
       case Success(jobs) =>

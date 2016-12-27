@@ -162,8 +162,12 @@ abstract class RDD[T: ClassTag](
     }
     // If this is the first time this RDD is marked for persisting, register it
     // with the SparkContext for cleanups and accounting. Do this only once.
+    // 如果这是第一次将此RDD标记为持久化，请将其注册到SparkContext以进行清除和计费。 这只做一次。
     if (storageLevel == StorageLevel.NONE) {
       sc.cleaner.foreach(_.registerRDDForCleanup(this))
+
+      // sparkcontext中有一个persistentRdds属性（既TimeStampedWeakValueHashMap[Int, RDD[_]]，其中int为RDD的id）用于记录经过persist之后的RDD
+      // 将此RDD注册到sparkcontext的persistentRdds中
       sc.persistRDD(this)
     }
     storageLevel = newLevel
@@ -176,6 +180,9 @@ abstract class RDD[T: ClassTag](
    * have a storage level set yet. Local checkpointing is an exception.
    */
   def persist(newLevel: StorageLevel): this.type = {
+    //只有调用过localCheckpoint()的RDD，则该RDD对应的checkpointData才不为空,且类型为LocalRDDCheckpointData
+    //注意，调用过checkpoint()的RDD，则该RDD对应的checkpointData才不为空，且类型为ReliableRDDCheckpointData
+    //根据checkpointData是否有值和类型,来判断RDD是否被checkpoint
     if (isLocallyCheckpointed) {
       // This means the user previously called localCheckpoint(), which should have already
       // marked this RDD for persisting. Here we should override the old storage level with
@@ -1522,16 +1529,27 @@ abstract class RDD[T: ClassTag](
    * step of replicating the materialized data in a reliable distributed file system. This is
    * useful for RDDs with long lineages that need to be truncated periodically (e.g. GraphX).
    *
+   * 此方法适用于希望截断RDD谱系的用户，同时跳过在可靠的分布式文件系统中复制实体化数据的昂贵步骤。
+   * 这对于需要定期截断的具有长谱系的RDD（例如GraphX）是有用的
+   *
    * Local checkpointing sacrifices fault-tolerance for performance. In particular, checkpointed
    * data is written to ephemeral local storage in the executors instead of to a reliable,
    * fault-tolerant storage. The effect is that if an executor fails during the computation,
    * the checkpointed data may no longer be accessible, causing an irrecoverable job failure.
    *
+   * 本地检查点牺牲了容错的性能。 特别地，检查点的数据被写入执行器中的临时本地存储器，而不是可靠的容错存储器。
+   * 效果是，如果执行器在计算期间失败，则检查点数据可能不再可访问，从而导致不可恢复的作业失败。
+   *
+   *
    * This is NOT safe to use with dynamic allocation, which removes executors along
    * with their cached blocks. If you must use both features, you are advised to set
    * `spark.dynamicAllocation.cachedExecutorIdleTimeout` to a high value.
    *
+   * 这不能安全地用于动态分配，这会删除执行器及其高速缓存块。
+   * 如果必须使用这两个功能，建议您将“spark.dynamicAllocation.cachedExecutorIdleTimeout”设置为一个较高的值。
+   *
    * The checkpoint directory set through `SparkContext#setCheckpointDir` is not used.
+   * 不使用通过`SparkContext＃setCheckpointDir`设置的检查点目录
    */
   def localCheckpoint(): this.type = RDDCheckpointData.synchronized {
     if (conf.getBoolean("spark.dynamicAllocation.enabled", false) &&
@@ -1568,6 +1586,7 @@ abstract class RDD[T: ClassTag](
       // Lineage is not truncated yet, so just override any existing checkpoint data with ours
       checkpointData match {
         case Some(_: ReliableRDDCheckpointData[_]) => logWarning(
+        //RDD已经标记为可靠的检查点：(此时此地)用本地检查点覆盖
           "RDD was already marked for reliable checkpointing: overriding with local checkpoint.")
         case _ =>
       }
