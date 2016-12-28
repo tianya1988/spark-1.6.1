@@ -45,8 +45,11 @@ class JobScheduler(val ssc: StreamingContext) extends Logging {
   // https://gist.github.com/AlainODea/1375759b8720a3f9f094
   private val jobSets: java.util.Map[Time, JobSet] = new ConcurrentHashMap[Time, JobSet]
   private val numConcurrentJobs = ssc.conf.getInt("spark.streaming.concurrentJobs", 1)
+
+  // 生成Executors.newFixedThreadPool线程池
   private val jobExecutor =
     ThreadUtils.newDaemonFixedThreadPool(numConcurrentJobs, "streaming-job-executor")
+
   private val jobGenerator = new JobGenerator(this)
   val clock = jobGenerator.clock
   val listenerBus = new StreamingListenerBus()
@@ -68,6 +71,7 @@ class JobScheduler(val ssc: StreamingContext) extends Logging {
 
       override protected def onError(e: Throwable): Unit = reportError("Error in job scheduler", e)
     }
+    // 启动eventLoop中的eventThread线程，用来处理事件
     eventLoop.start()
 
     // attach rate controllers of input streams to receive batch completion updates
@@ -125,6 +129,13 @@ class JobScheduler(val ssc: StreamingContext) extends Logging {
     } else {
       listenerBus.post(StreamingListenerBatchSubmitted(jobSet.toBatchInfo))
       jobSets.put(jobSet.time, jobSet)
+
+      // JobHandler为JobScheduler的常规内部类
+      // 获取Executors.newFixedThreadPool线程池,并执行JobHandler extends Runnable 这个任务,
+      // 也就是该线程池中会有一个线程来执行JobHandler的run方法
+      // JobHandler的run方法会调用job的run方法
+      // job中封装了一个RDD DAG的实例和block数据
+      // 注意:此地的Job指的是sparkstreaming中的Job，注意sparkstreaming中的Job和spark core中的job不是一个概念
       jobSet.jobs.foreach(job => jobExecutor.execute(new JobHandler(job)))
       logInfo("Added jobs for time " + jobSet.time)
     }
@@ -222,6 +233,7 @@ class JobScheduler(val ssc: StreamingContext) extends Logging {
           // scheduler, since we may need to write output to an existing directory during checkpoint
           // recovery; see SPARK-4835 for more details.
           PairRDDFunctions.disableOutputSpecValidation.withValue(true) {
+            // 主要逻辑，直接调用了 job.run()
             job.run()
           }
           _eventLoop = eventLoop

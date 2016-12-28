@@ -85,12 +85,17 @@ class JobGenerator(jobScheduler: JobScheduler) extends Logging {
     checkpointWriter
 
     /**
-     * 每隔一段时间RecurringTimer会生成一个JobGeneratorEvent，
+     * 每隔一段时间RecurringTimer会生成一个JobGeneratorEvent(既GenerateJobs)，
      * 并将此事件JobGeneratorEvent放入到EventLoop类中
      * 维护的eventQueue（既java.util.concurrent.LinkedBlockingDeque）队列中,
      * EventLoop会启动一个线程，当有事件放入此队列时，
      * 执行回调函数onReceive，也就是JobGenerator中的processEvent，
      * 进而执行generateJobs方法，进而调用graph.generateJobs(time)
+     * generateJobs方法会生成Seq[Job]既JobSet，该JobSet中包含完整的blocks数据块和RDD DAG实例（运算的逻辑）
+     * generateJobs方法中生成JobSet成功后，会调用jobScheduler.submitJobSet(JobSet(time, jobs, streamIdToInputInfos))
+     *
+     * 注意:
+     * graph.generateJobs(time)过程，一次batch产生一个Seq[Job}，里面可能包含多个 Job —— 所以，确切的，有几个output操作，就调用几次ForEachDStream.generatorJob(time)，就产生出几个Job
      */
 
     eventLoop = new EventLoop[JobGeneratorEvent]("JobGenerator") {
@@ -200,6 +205,25 @@ class JobGenerator(jobScheduler: JobScheduler) extends Logging {
   private def startFirstTime() {
     val startTime = new Time(timer.getStartTime())
     graph.start(startTime - graph.batchDuration)
+
+
+    // timer为RecurringTimer，
+    // 而RecurringTimer中启动了一个线程，该线程的run方法调用了RecurringTimer中的loop方法，
+    // 而loop方法循环调用callback方法，
+    // 而callback方法在初始化timer时已经指定，
+    // longTime => eventLoop.post(GenerateJobs(new Time(longTime))) is callback
+
+    /** see line 88
+     * 每隔一段时间RecurringTimer会生成一个JobGeneratorEvent(既GenerateJobs)，
+     * 并将此事件JobGeneratorEvent放入到EventLoop类中
+     * 维护的eventQueue（既java.util.concurrent.LinkedBlockingDeque）队列中,
+     * EventLoop会启动一个线程，当有事件放入此队列时，
+     * 执行回调函数onReceive，也就是JobGenerator中的processEvent，
+     * 进而执行generateJobs方法，进而调用graph.generateJobs(time),
+     * generateJobs方法会生成Seq[Job]既JobSet，该JobSet中包含完整的blocks数据块和RDD DAG实例（运算的逻辑）
+     * generateJobs方法中生成JobSet成功后，会调用jobScheduler.submitJobSet(JobSet(time, jobs, streamIdToInputInfos))
+     */
+
     timer.start(startTime.milliseconds)
     logInfo("Started JobGenerator at " + startTime)
   }

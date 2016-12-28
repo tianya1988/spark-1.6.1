@@ -58,6 +58,7 @@ class RecurringTimer(clock: Clock, period: Long, callback: (Long) => Unit, name:
    */
   def start(startTime: Long): Long = synchronized {
     nextTime = startTime
+
     thread.start()
     logInfo("Started timer for " + name + " at time " + nextTime)
     nextTime

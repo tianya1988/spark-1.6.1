@@ -28,6 +28,8 @@ import org.apache.spark.Logging
  * An event loop to receive events from the caller and process all events in the event thread. It
  * will start an exclusive event thread to process all events.
  *
+ * 一个事件循环，用于 从调用者接收事件,并处理 事件线程 中的所有事件。 它将启动一个独占事件线程来处理所有事件。
+ *
  * Note: The event queue will grow indefinitely. So subclasses should make sure `onReceive` can
  * handle events in time to avoid the potential OOM.
  */
@@ -45,10 +47,12 @@ private[spark] abstract class EventLoop[E](name: String) extends Logging {
         while (!stopped.get) {
           val event = eventQueue.take()
           try {
+            // onReceive此方法已经在生成这个eventLoop实例的时候被重写
             onReceive(event)
           } catch {
             case NonFatal(e) => {
               try {
+                // onError此方法已经在生成这个eventLoop实例的时候被重写
                 onError(e)
               } catch {
                 case NonFatal(e) => logError("Unexpected error in " + name, e)
