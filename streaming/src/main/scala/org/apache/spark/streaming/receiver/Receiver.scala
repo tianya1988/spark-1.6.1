@@ -108,6 +108,7 @@ abstract class Receiver[T](val storageLevel: StorageLevel) extends Serializable 
   def onStop()
 
   /** Override this to specify a preferred location (hostname). */
+  // 覆盖此选项以指定首选位置（主机名）
   def preferredLocation : Option[String] = None
 
   /**

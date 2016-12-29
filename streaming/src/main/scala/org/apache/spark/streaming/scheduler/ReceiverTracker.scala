@@ -152,8 +152,12 @@ class ReceiverTracker(ssc: StreamingContext, skipReceiverLaunch: Boolean = false
     }
 
     if (!receiverInputStreams.isEmpty) {
+      // endpoint: RpcEndpointRef
       endpoint = ssc.env.rpcEnv.setupEndpoint(
         "ReceiverTracker", new ReceiverTrackerEndpoint(ssc.env.rpcEnv))
+
+      // launchReceivers() 方法将 Receiver 分发到多个 executor 上去
+      // 然后在每个 executor 上，由 ReceiverSupervisor 来分别启动一个 Receiver 接收数据
       if (!skipReceiverLaunch) launchReceivers()
       logInfo("ReceiverTracker started")
       trackerState = Started
@@ -411,6 +415,7 @@ class ReceiverTracker(ssc: StreamingContext, skipReceiverLaunch: Boolean = false
    * worker nodes as a parallel collection, and runs them.
    */
   private def launchReceivers(): Unit = {
+    // receivers: Array[Receiver[_]]
     val receivers = receiverInputStreams.map(nis => {
       val rcvr = nis.getReceiver()
       rcvr.setReceiverId(nis.id)
@@ -447,7 +452,9 @@ class ReceiverTracker(ssc: StreamingContext, skipReceiverLaunch: Boolean = false
     override def receive: PartialFunction[Any, Unit] = {
       // Local messages
       case StartAllReceivers(receivers) =>
+        // 计算每个 Receiver 的目的地 executor 列表
         val scheduledLocations = schedulingPolicy.scheduleReceivers(receivers, getExecutors)
+
         for (receiver <- receivers) {
           val executors = scheduledLocations(receiver.streamId)
           updateReceiverScheduledExecutors(receiver.streamId, executors)
