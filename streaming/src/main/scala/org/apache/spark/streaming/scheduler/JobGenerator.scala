@@ -278,17 +278,32 @@ class JobGenerator(jobScheduler: JobScheduler) extends Logging {
     // Update: This is probably redundant after threadlocal stuff in SparkEnv has been removed.
     SparkEnv.set(ssc.env)
     Try {
+      // 第1步: ReceiverTracker 将目前已收到的数据进行一次allocate，即将上次batch切分后的数据切分到到本次新的batch里
       jobScheduler.receiverTracker.allocateBlocksToBatch(time) // allocate received blocks to batch
 
-      //生成RDDDAG 实例
+      // 第2步: 生成 本batch的RDD DAG 实例
+      // 要求DStreamGraph复制出一套新的RDD DAG的实例，
+      // 具体过程是：DStreamGraph将要求图里的尾DStream节点生成具体的RDD实例，
+      // 并递归的调用尾 DStream 的上游DStream节点……以此遍历整个 DStreamGraph，遍历结束也就正好生成了RDD DAG的实例
       graph.generateJobs(time) // generate jobs using allocated block
     } match {
       case Success(jobs) =>
+        // 第3步: 获取第1步ReceiverTracker分配到本batch的源头数据的meta信息
+        // streamIdToInputInfos:Map[Int, StreamInputInfo]
         val streamIdToInputInfos = jobScheduler.inputInfoTracker.getInfo(time)
+
+
+        // 第4步: 将第2步生成的本batch的RDD DAG，和第3步获取到的meta信息，一同提交给JobScheduler异步执行
+        // 这里我们提交的是将(a)time (b)Seq[job] (c)块数据的meta信息 这三者包装为一个JobSet，然后调用 JobScheduler.submitJobSet(JobSet) 提交给 JobScheduler
+        // 这里的向 JobScheduler 提交过程与 JobScheduler 接下来在 jobExecutor 里执行过程是异步分离的，因此本步将非常快即可返回
         jobScheduler.submitJobSet(JobSet(time, jobs, streamIdToInputInfos))
+
       case Failure(e) =>
         jobScheduler.reportError("Error generating jobs for time " + time, e)
     }
+    // 第5步: 只要提交结束（不管是否已开始异步执行），就马上对整个系统的当前运行状态做一个checkpoint
+    // 这里做checkpoint也只是异步提交一个DoCheckpoint消息请求，不用等checkpoint 真正写完成 即可返回
+    // 这里也简单描述一下checkpoint包含的内容，包括已经提交了的、但尚未运行结束的JobSet等实际运行时信息
     eventLoop.post(DoCheckpoint(time, clearCheckpointDataLater = false))
   }
 

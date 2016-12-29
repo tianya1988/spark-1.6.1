@@ -74,7 +74,10 @@ private[streaming] class InputInfoTracker(ssc: StreamingContext) extends Logging
 
   /** Get the all the input stream's information of specified batch time */
   def getInfo(batchTime: Time): Map[Int, StreamInputInfo] = synchronized {
+    // batchTimeToInputInfos:mutable.HashMap[Time, mutable.HashMap[Int, StreamInputInfo]]
+    // inputInfos:Option[mutable.HashMap[Int, StreamInputInfo]]
     val inputInfos = batchTimeToInputInfos.get(batchTime)
+
     // Convert mutable HashMap to immutable Map for the caller
     inputInfos.map(_.toMap).getOrElse(Map[Int, StreamInputInfo]())
   }
