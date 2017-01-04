@@ -453,6 +453,7 @@ class ReceiverTracker(ssc: StreamingContext, skipReceiverLaunch: Boolean = false
       // Local messages
       case StartAllReceivers(receivers) =>
         // 计算每个 Receiver 的目的地 executor 列表
+        // scheduledLocations: Map[Int, Seq[TaskLocation]]
         val scheduledLocations = schedulingPolicy.scheduleReceivers(receivers, getExecutors)
 
         for (receiver <- receivers) {
@@ -628,13 +629,13 @@ class ReceiverTracker(ssc: StreamingContext, skipReceiverLaunch: Boolean = false
     }
 
     /**
-     * Call when a receiver is terminated. It means we won't restart its Spark job.
+     * Call when a receiver is terminated(终止). It means we won't restart its Spark job.
      */
     private def onReceiverJobFinish(receiverId: Int): Unit = {
       receiverJobExitLatch.countDown()
       receiverTrackingInfos.remove(receiverId).foreach { receiverTrackingInfo =>
         if (receiverTrackingInfo.state == ReceiverState.ACTIVE) {
-          logWarning(s"Receiver $receiverId exited but didn't deregister")
+          logWarning(s"Receiver $receiverId exited but didn't deregister(注销)")
         }
       }
     }

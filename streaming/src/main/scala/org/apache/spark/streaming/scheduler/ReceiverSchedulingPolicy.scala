@@ -57,8 +57,8 @@ import org.apache.spark.streaming.receiver.Receiver
 private[streaming] class ReceiverSchedulingPolicy {
 
   /**
-   * Try our best to schedule receivers with evenly distributed. However, if the
-   * `preferredLocation`s of receivers are not even, we may not be able to schedule them evenly
+   * Try our best to schedule receivers with evenly(均匀) distributed. However, if the
+   * `preferredLocation`s of receivers are not even(偶数), we may not be able to schedule them evenly
    * because we have to respect them.
    *
    * Here is the approach to schedule executors:
